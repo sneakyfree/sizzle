@@ -1,0 +1,26 @@
+{
+  "name": "sizzle-platform",
+  "version": "0.1.0",
+  "description": "The most normie-friendly GPU compute platform in the world",
+  "private": true,
+  "workspaces": [
+    "src/api",
+    "src/web",
+    "src/services/*",
+    "src/shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd src/api && npm run dev",
+    "dev:web": "cd src/web && npm run dev",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "cd src/api && npm run build",
+    "build:web": "cd src/web && npm run build",
+    "test": "jest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": ["gpu", "compute", "ai", "ml", "cloud"],
+  "author": "Sizzle Team",
+  "license": "UNLICENSED"
+}

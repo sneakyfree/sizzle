@@ -1,0 +1,305 @@
+// Pump Me Database Schema
+// Using PostgreSQL with Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================
+// USER & AUTH
+// =====================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String?
+  name          String?
+  
+  // OAuth
+  googleId      String?  @unique
+  githubId      String?  @unique
+  
+  // Verification
+  emailVerified Boolean  @default(false)
+  phoneNumber   String?
+  phoneVerified Boolean  @default(false)
+  
+  // Subscription
+  tier          UserTier @default(FREE)
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  
+  // Credits
+  creditBalance Float    @default(0)
+  freeMinutesRemaining Int @default(5)
+  
+  // Settings
+  autoTopup     Boolean  @default(false)
+  autoTopupThreshold Float @default(10)
+  autoTopupAmount Float @default(50)
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relations
+  sessions      Session[]
+  invoices      Invoice[]
+  apiKeys       ApiKey[]
+  
+  @@index([email])
+  @@index([stripeCustomerId])
+}
+
+enum UserTier {
+  FREE
+  PUMP_VPN
+  PUMP_HOME
+  ENTERPRISE
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  // Permissions
+  scopes    String[] @default(["session:create", "session:read"])
+  
+  // Usage
+  lastUsedAt DateTime?
+  usageCount Int      @default(0)
+  
+  // Status
+  isActive  Boolean  @default(true)
+  expiresAt DateTime?
+  
+  createdAt DateTime @default(now())
+  
+  @@index([key])
+  @@index([userId])
+}
+
+// =====================
+// SESSIONS
+// =====================
+
+model Session {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  // GPU Configuration
+  tier          GpuTier
+  gpuType       String
+  gpuCount      Int      @default(1)
+  
+  // Provider
+  provider      String   @default("local")
+  providerInstanceId String?
+  
+  // Model
+  modelId       String?
+  modelName     String?
+  
+  // Status
+  status        SessionStatus @default(PENDING)
+  
+  // Access
+  accessUrl     String?
+  sshHost       String?
+  sshPort       Int?
+  
+  // Timing
+  startedAt     DateTime?
+  pausedAt      DateTime?
+  terminatedAt  DateTime?
+  
+  // Billing
+  pricePerMinute Float
+  totalMinutes   Float    @default(0)
+  totalCost      Float    @default(0)
+  wasFreeMinutes Boolean  @default(false)
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  metrics       SessionMetric[]
+  logs          SessionLog[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum GpuTier {
+  STARTER
+  PRO
+  BEAST
+  ULTRA
+}
+
+enum SessionStatus {
+  PENDING
+  PROVISIONING
+  RUNNING
+  PAUSED
+  TERMINATING
+  TERMINATED
+  ERROR
+}
+
+model SessionMetric {
+  id            String   @id @default(cuid())
+  sessionId     String
+  session       Session  @relation(fields: [sessionId], references: [id])
+  
+  gpuUtilization Float
+  memoryUsed     Float
+  temperature    Float
+  powerDraw      Float
+  
+  timestamp     DateTime @default(now())
+  
+  @@index([sessionId, timestamp])
+}
+
+model SessionLog {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  
+  level     LogLevel
+  message   String
+  metadata  Json?
+  
+  timestamp DateTime @default(now())
+  
+  @@index([sessionId, timestamp])
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+// =====================
+// BILLING
+// =====================
+
+model Invoice {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  // Stripe
+  stripeInvoiceId String? @unique
+  stripePaymentIntentId String?
+  
+  // Amount
+  amount        Float
+  currency      String   @default("USD")
+  
+  // Status
+  status        InvoiceStatus @default(PENDING)
+  
+  // Details
+  description   String?
+  lineItems     Json?
+  
+  // Timing
+  dueDate       DateTime?
+  paidAt        DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+// =====================
+// MODELS
+// =====================
+
+model Model {
+  id            String   @id @default(cuid())
+  
+  // Identity
+  slug          String   @unique
+  name          String
+  description   String?
+  
+  // Category
+  category      ModelCategory
+  
+  // Requirements
+  minVramGb     Int
+  recommendedGpu String[]
+  
+  // Source
+  source        String?  // "ollama", "huggingface", "custom"
+  sourceId      String?  // e.g., "llama3.1:405b"
+  
+  // Stats
+  downloadCount Int      @default(0)
+  rating        Float?
+  
+  // Status
+  isPublic      Boolean  @default(true)
+  isFeatured    Boolean  @default(false)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([category])
+  @@index([slug])
+}
+
+enum ModelCategory {
+  LLM
+  IMAGE
+  AUDIO
+  VIDEO
+  CODE
+  MULTIMODAL
+  OTHER
+}
+
+// =====================
+// PROVIDERS
+// =====================
+
+model ProviderStatus {
+  id            String   @id @default(cuid())
+  provider      String   @unique
+  
+  isHealthy     Boolean
+  latencyMs     Int
+  
+  availableGpus Json?
+  
+  lastCheck     DateTime @default(now())
+  
+  @@index([provider])
+}

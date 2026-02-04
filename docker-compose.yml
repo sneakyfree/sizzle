@@ -1,0 +1,121 @@
+# Sizzle - Docker Compose
+# Development and production deployment configuration
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: sizzle-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sizzle
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sizzle_dev_password}
+      POSTGRES_DB: sizzle
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sizzle -d sizzle"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (for session state, rate limiting)
+  redis:
+    image: redis:7-alpine
+    container_name: sizzle-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Server
+  api:
+    build:
+      context: ./src/api
+      dockerfile: Dockerfile
+    container_name: sizzle-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://sizzle:${DB_PASSWORD:-sizzle_dev_password}@db:5432/sizzle
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      # GPU Providers
+      LOCAL_PROVIDER_ENABLED: ${LOCAL_PROVIDER_ENABLED:-true}
+      LOCAL_OLLAMA_URL: ${LOCAL_OLLAMA_URL:-http://veron1.thewindstorm.uk:11434}
+      VAST_API_KEY: ${VAST_API_KEY}
+      VAST_ENABLED: ${VAST_ENABLED:-false}
+      RUNPOD_API_KEY: ${RUNPOD_API_KEY}
+      RUNPOD_ENABLED: ${RUNPOD_ENABLED:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web Frontend
+  web:
+    build:
+      context: ./src/web
+      dockerfile: Dockerfile
+    container_name: sizzle-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy (production)
+  nginx:
+    image: nginx:alpine
+    container_name: sizzle-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - web
+      - api
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: sizzle-network

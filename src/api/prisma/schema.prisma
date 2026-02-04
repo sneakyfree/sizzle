@@ -1,0 +1,347 @@
+// Pump Me Platform - Database Schema
+// "The most normie-friendly GPU compute platform in the world"
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// USER & AUTHENTICATION
+// =============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  avatarUrl     String?
+  
+  // Account status
+  emailVerified Boolean   @default(false)
+  phoneNumber   String?
+  phoneVerified Boolean   @default(false)
+  
+  // User tier: free | starter | pro | enterprise
+  tier          String    @default("free")
+  
+  // Billing
+  stripeCustomerId String? @unique
+  creditBalance    Int     @default(0) // In cents
+  
+  // OAuth
+  googleId      String?   @unique
+  githubId      String?   @unique
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relations
+  sessions      PumpSession[]
+  apiKeys       ApiKey[]
+  subscriptions Subscription[]
+  transactions  Transaction[]
+  
+  @@index([email])
+  @@index([stripeCustomerId])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name        String    // User-provided name for the key
+  keyHash     String    @unique // Hashed API key (never store plain)
+  keyPrefix   String    // First 8 chars for identification (pm_live_abc...)
+  
+  // Permissions
+  scopes      String[]  @default(["sessions:read", "sessions:write"])
+  
+  // Limits
+  rateLimit   Int       @default(1000) // Requests per minute
+  
+  // Status
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([keyPrefix])
+  @@index([userId])
+}
+
+// =============================================================================
+// PUMP SESSIONS (The Core Product)
+// =============================================================================
+
+model PumpSession {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Session type
+  type          String    @default("burst") // burst | vpn | home
+  
+  // GPU Configuration
+  tier          String    // starter | pro | beast | ultra
+  gpuType       String    // RTX 5090, H100, B300, etc.
+  gpuCount      Int       @default(1)
+  
+  // Model (optional)
+  modelId       String?
+  modelName     String?
+  
+  // Provider (which backend fulfills this)
+  provider      String    // local | vast | runpod | lambda | coreweave
+  providerInstanceId String? // External instance ID
+  
+  // Status
+  status        String    @default("pending")
+  // pending -> provisioning -> ready -> active -> paused -> terminated
+  
+  // Timing
+  requestedAt   DateTime  @default(now())
+  provisionedAt DateTime?
+  startedAt     DateTime?
+  pausedAt      DateTime?
+  terminatedAt  DateTime?
+  
+  // Billing
+  pricePerMinute Int      // In cents
+  totalMinutes   Int      @default(0)
+  totalCost      Int      @default(0) // In cents
+  
+  // Access
+  accessUrl     String?
+  accessToken   String?
+  
+  // Metadata
+  metadata      Json?
+  
+  // Relations
+  metrics       SessionMetric[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([provider])
+  @@index([requestedAt])
+}
+
+model SessionMetric {
+  id          String      @id @default(cuid())
+  sessionId   String
+  session     PumpSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  timestamp   DateTime    @default(now())
+  
+  gpuUtilization  Float?  // 0-100
+  memoryUsed      Float?  // 0-100
+  temperature     Float?  // Celsius
+  powerDraw       Float?  // Watts
+  
+  @@index([sessionId, timestamp])
+}
+
+// =============================================================================
+// MODELS LIBRARY
+// =============================================================================
+
+model Model {
+  id            String    @id @default(cuid())
+  slug          String    @unique // llama-3-70b, mistral-7b, etc.
+  name          String
+  description   String?
+  
+  // Model specs
+  provider      String    // meta, mistral, openai, anthropic, etc.
+  parameterSize String?   // 7B, 70B, 405B
+  contextLength Int?      // 4096, 32768, 128000
+  
+  // Requirements
+  minVram       Int?      // Minimum VRAM in GB
+  recommendedGpu String?  // Recommended GPU tier
+  
+  // Categories
+  category      String    // chat | code | image | video | audio | embedding
+  tags          String[]
+  
+  // Availability
+  isPublic      Boolean   @default(true)
+  isPreloaded   Boolean   @default(false) // Pre-downloaded on our infra
+  
+  // Metadata
+  huggingFaceId String?
+  modelCardUrl  String?
+  licenseType   String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([category])
+  @@index([isPreloaded])
+}
+
+// =============================================================================
+// BILLING & SUBSCRIPTIONS
+// =============================================================================
+
+model Subscription {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Plan
+  planId        String    // vpn_starter | vpn_pro | vpn_enterprise
+  planName      String
+  
+  // Stripe
+  stripeSubscriptionId String? @unique
+  stripePriceId String?
+  
+  // Status
+  status        String    @default("active")
+  // active | paused | canceled | past_due
+  
+  // Included hours
+  includedMinutes Int     @default(0)
+  usedMinutes     Int     @default(0)
+  
+  // Billing cycle
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  
+  canceledAt    DateTime?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([stripeSubscriptionId])
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Type
+  type          String    // credit_purchase | session_charge | subscription | refund
+  
+  // Amount (in cents)
+  amount        Int
+  currency      String    @default("usd")
+  
+  // Description
+  description   String
+  
+  // Reference
+  sessionId     String?
+  subscriptionId String?
+  stripePaymentIntentId String?
+  
+  // Status
+  status        String    @default("completed")
+  
+  createdAt     DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// PROVIDERS (GPU Backend Abstraction)
+// =============================================================================
+
+model Provider {
+  id            String    @id @default(cuid())
+  slug          String    @unique // vast | runpod | lambda | local
+  name          String
+  
+  // Status
+  isEnabled     Boolean   @default(true)
+  isHealthy     Boolean   @default(true)
+  lastHealthCheck DateTime?
+  
+  // Priority (lower = preferred)
+  priority      Int       @default(100)
+  
+  // Cost multiplier (1.0 = base price)
+  costMultiplier Float    @default(1.0)
+  
+  // API credentials (encrypted)
+  apiKeyEncrypted String?
+  
+  // Capabilities
+  gpuTypes      String[]  // What GPUs this provider offers
+  regions       String[]  // Available regions
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([isEnabled, priority])
+}
+
+// =============================================================================
+// WHITE-LABEL & RESELLER (Phase 4)
+// =============================================================================
+
+model Partner {
+  id            String    @id @default(cuid())
+  slug          String    @unique
+  name          String
+  
+  // Type
+  type          String    // white_label | reseller
+  
+  // Branding (white-label)
+  logoUrl       String?
+  primaryColor  String?
+  domain        String?
+  
+  // Billing
+  commissionRate Float    @default(0.2) // 20%
+  
+  // Status
+  isActive      Boolean   @default(true)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// =============================================================================
+// AUDIT & COMPLIANCE (Phase 6)
+// =============================================================================
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  
+  userId      String?
+  action      String    // user.login, session.create, billing.charge, etc.
+  resource    String?   // Resource type affected
+  resourceId  String?   // Resource ID affected
+  
+  // Request details
+  ipAddress   String?
+  userAgent   String?
+  
+  // Result
+  success     Boolean   @default(true)
+  errorMessage String?
+  
+  // Additional data
+  metadata    Json?
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
