@@ -9,7 +9,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { requireAuth as authMiddleware } from '../middleware/auth'
 import providers, { provisionWithBestProvider } from '../providers'
 import { GPU_TIERS, GpuTier } from '../types/provider'
 
@@ -108,7 +108,7 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
     const sessionId = `pump_${uuidv4().replace(/-/g, '').slice(0, 12)}`
     
     // Create session record (pending)
-    const session = await prisma.session.create({
+    const session = await prisma.pumpSession.create({
       data: {
         id: sessionId,
         userId,
@@ -132,7 +132,7 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
     
     if (!provisionResult.success || !provisionResult.instance) {
       // Update session to error status
-      await prisma.session.update({
+      await prisma.pumpSession.update({
         where: { id: sessionId },
         data: { status: 'ERROR' },
       })
@@ -145,7 +145,7 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
     }
     
     // Update session with provider details
-    const updatedSession = await prisma.session.update({
+    const updatedSession = await prisma.pumpSession.update({
       where: { id: sessionId },
       data: {
         status: 'PROVISIONING',
@@ -191,7 +191,7 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
     const userId = (req as any).user.userId
     
     // Get session
-    const session = await prisma.session.findFirst({
+    const session = await prisma.pumpSession.findFirst({
       where: { id, userId },
       include: {
         metrics: {
@@ -222,7 +222,7 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
           }
           const newStatus = statusMap[liveStatus.status] || session.status
           
-          await prisma.session.update({
+          await prisma.pumpSession.update({
             where: { id },
             data: {
               status: newStatus,
@@ -284,7 +284,7 @@ router.post('/:id/stop', authMiddleware, async (req: Request, res: Response) => 
     const userId = (req as any).user.userId
     
     // Get session
-    const session = await prisma.session.findFirst({
+    const session = await prisma.pumpSession.findFirst({
       where: { id, userId },
     })
     
@@ -316,7 +316,7 @@ router.post('/:id/stop', authMiddleware, async (req: Request, res: Response) => 
     }
     
     // Update session
-    const updatedSession = await prisma.session.update({
+    const updatedSession = await prisma.pumpSession.update({
       where: { id },
       data: {
         status: 'TERMINATED',
@@ -371,7 +371,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       where.status = status.toString().toUpperCase()
     }
     
-    const sessions = await prisma.session.findMany({
+    const sessions = await prisma.pumpSession.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: parseInt(limit.toString()),
@@ -393,7 +393,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       },
     })
     
-    const total = await prisma.session.count({ where })
+    const total = await prisma.pumpSession.count({ where })
     
     res.json({
       sessions: sessions.map(s => ({
@@ -418,7 +418,7 @@ router.get('/:id/metrics', authMiddleware, async (req: Request, res: Response) =
     const userId = (req as any).user.userId
     
     // Verify ownership
-    const session = await prisma.session.findFirst({
+    const session = await prisma.pumpSession.findFirst({
       where: { id, userId },
     })
     

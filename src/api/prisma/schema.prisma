@@ -32,6 +32,7 @@ model User {
   // Billing
   stripeCustomerId String? @unique
   creditBalance    Int     @default(0) // In cents
+  freeMinutesRemaining Int @default(30) // Free tier minutes
   
   // OAuth
   googleId      String?   @unique
@@ -126,6 +127,11 @@ model PumpSession {
   // Metadata
   metadata      Json?
   
+  // Access details
+  sshHost       String?
+  sshPort       Int?
+  wasFreeMinutes Boolean @default(false)
+  
   // Relations
   metrics       SessionMetric[]
   
@@ -181,6 +187,8 @@ model Model {
   huggingFaceId String?
   modelCardUrl  String?
   licenseType   String?
+  isFeatured    Boolean   @default(false)
+  downloadCount Int       @default(0)
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -339,9 +347,17 @@ model AuditLog {
   // Additional data
   metadata    Json?
   
+  // Access details
+  sshHost       String?
+  sshPort       Int?
+  wasFreeMinutes Boolean @default(false)
+  
   createdAt   DateTime  @default(now())
   
   @@index([userId])
   @@index([action])
   @@index([createdAt])
 }
+
+// Additional fields needed by routes
+// Added by Kit 0 during Gemini Ultra build - 2026-02-05

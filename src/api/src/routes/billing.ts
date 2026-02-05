@@ -15,7 +15,7 @@ import stripe, {
   createSubscriptionCheckout,
   handleWebhook 
 } from '../lib/stripe'
-import { authMiddleware } from '../middleware/auth'
+import { requireAuth as authMiddleware } from '../middleware/auth'
 
 const router = Router()
 
