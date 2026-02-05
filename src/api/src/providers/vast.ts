@@ -83,7 +83,7 @@ export class VastProvider implements GpuProvider {
       throw new Error(`Vast.ai API error: ${response.status} - ${error}`)
     }
     
-    return response.json()
+    return response.json() as unknown as T
   }
   
   async healthCheck(): Promise<ProviderHealth> {

@@ -30,7 +30,7 @@ export class LocalProvider implements GpuProvider {
     
     try {
       // Check if Ollama is responding
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response: any = await fetch(`${this.baseUrl}/api/tags`);
       const latencyMs = Date.now() - start;
       
       if (!response.ok) {
@@ -46,7 +46,7 @@ export class LocalProvider implements GpuProvider {
       
       // Check available models
       const data = await response.json();
-      const modelCount = data.models?.length || 0;
+      const modelCount = data?.models?.length || 0;
       
       return {
         provider: this.slug,
@@ -208,7 +208,7 @@ export class LocalProvider implements GpuProvider {
     const ollamaModel = modelMap[modelId] || modelId;
     
     // Pull model if not exists (this is async and may take a while)
-    const response = await fetch(`${this.baseUrl}/api/pull`, {
+    const response: any = await fetch(`${this.baseUrl}/api/pull`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: ollamaModel }),
@@ -224,9 +224,9 @@ export class LocalProvider implements GpuProvider {
    */
   async listModels(): Promise<string[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response: any = await fetch(`${this.baseUrl}/api/tags`);
       const data = await response.json();
-      return data.models?.map((m: { name: string }) => m.name) || [];
+      return data?.models?.map((m: { name: string }) => m.name) || [];
     } catch {
       return [];
     }

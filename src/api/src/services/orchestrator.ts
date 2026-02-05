@@ -99,7 +99,7 @@ export async function selectBestProvider(
     .filter(p => {
       // Check if provider has compatible GPUs available
       const hasGpu = p.health.availableGpus.some(
-        gpu => (tier.gpuOptions as string[]).includes(gpu.type) && gpu.available > 0
+        gpu => (tier.gpuOptions as unknown as string[]).includes(gpu.type) && gpu.available > 0
       );
       return hasGpu;
     })
@@ -221,7 +221,7 @@ export async function getTierPricing(tier: GpuTier) {
     .filter(h => h.isHealthy)
     .flatMap(h =>
       h.availableGpus
-        .filter(gpu => (tierConfig.gpuOptions as string[]).includes(gpu.type))
+        .filter(gpu => (tierConfig.gpuOptions as unknown as string[]).includes(gpu.type))
         .map(gpu => ({
           provider: h.provider,
           gpuType: gpu.type,

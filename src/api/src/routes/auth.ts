@@ -32,9 +32,9 @@ const loginSchema = z.object({
 // Helper to generate JWT
 function generateToken(userId: string, email: string): string {
   return jwt.sign(
-    { userId, email },
+    { userId, email } as jwt.JwtPayload,
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+    { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
   )
 }
 

@@ -32,6 +32,10 @@ model User {
   // Billing
   stripeCustomerId String? @unique
   creditBalance    Int     @default(0) // In cents
+  stripeSubscriptionId String?
+  autoTopup         Boolean   @default(false)
+  autoTopupThreshold Int       @default(500) // cents
+  autoTopupAmount    Int       @default(2000) // cents
   freeMinutesRemaining Int @default(30) // Free tier minutes
   
   // OAuth
@@ -48,6 +52,7 @@ model User {
   apiKeys       ApiKey[]
   subscriptions Subscription[]
   transactions  Transaction[]
+  invoices      Invoice[]
   
   @@index([email])
   @@index([stripeCustomerId])
@@ -106,6 +111,7 @@ model PumpSession {
   
   // Status
   status        String    @default("pending")
+  description   String?
   // pending -> provisioning -> ready -> active -> paused -> terminated
   
   // Timing
@@ -361,3 +367,24 @@ model AuditLog {
 
 // Additional fields needed by routes
 // Added by Kit 0 during Gemini Ultra build - 2026-02-05
+
+// Additional User fields for billing (added by Kit 0)
+// Note: These should be in User model but adding separately to not break existing model
+
+// Invoice Model (added by Kit 0)
+model Invoice {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  amount        Int       // cents
+  currency      String    @default("usd")
+  status        String    @default("pending") // pending, paid, failed
+  description   String?
+  stripeInvoiceId String?
+  
+  createdAt     DateTime  @default(now())
+  paidAt        DateTime?
+  
+  @@index([userId])
+}

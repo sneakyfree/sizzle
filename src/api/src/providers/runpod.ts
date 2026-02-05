@@ -80,12 +80,12 @@ export class RunPodProvider implements GpuProvider {
       throw new Error(`RunPod API error: ${response.status} - ${error}`)
     }
     
-    const result = await response.json()
-    if (result.errors) {
-      throw new Error(`RunPod GraphQL error: ${JSON.stringify(result.errors)}`)
+    const result: any = await response.json()
+    if (result?.errors) {
+      throw new Error(`RunPod GraphQL error: ${JSON.stringify(result?.errors)}`)
     }
     
-    return result.data
+    return result?.data
   }
   
   async healthCheck(): Promise<ProviderHealth> {

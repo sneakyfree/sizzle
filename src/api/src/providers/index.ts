@@ -6,15 +6,15 @@
  */
 
 import { GpuProvider, ProviderHealth, ProvisionRequest, ProvisionResult } from '../types/provider'
-import localProvider from './local'
+import { localProvider } from './local'
 import vastProvider from './vast'
 import runpodProvider from './runpod'
 
 // All available providers
-const providers: Map<string, GpuProvider> = new Map([
-  ['local', localProvider],
-  ['vast', vastProvider],
-  ['runpod', runpodProvider],
+const providers: Map<string, GpuProvider> = new Map<string, GpuProvider>([
+  ['local', localProvider as GpuProvider],
+  ['vast', vastProvider as GpuProvider],
+  ['runpod', runpodProvider as GpuProvider],
 ])
 
 // Provider health cache
