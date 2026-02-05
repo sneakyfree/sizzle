@@ -66,6 +66,7 @@ export interface CreditPackage {
   totalCredits: number
   price: number
   priceFormatted: string
+  valuePerCredit: string
 }
 
 // Auth storage
