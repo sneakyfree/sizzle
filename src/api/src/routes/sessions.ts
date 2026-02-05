@@ -111,8 +111,9 @@ router.post('/create', authMiddleware, async (req: Request, res: Response) => {
     const session = await prisma.pumpSession.create({
       data: {
         id: sessionId,
-        userId,
+        user: { connect: { id: userId } },
         tier: tier.toUpperCase() as any,
+        provider: 'local',
         gpuType: tierConfig.gpuOptions[0], // Will be updated after provisioning
         pricePerMinute: tierConfig.pricePerMinute,
         modelId,
@@ -373,7 +374,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     
     const sessions = await prisma.pumpSession.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { requestedAt: 'desc' },
       take: parseInt(limit.toString()),
       skip: parseInt(offset.toString()),
       select: {
@@ -389,7 +390,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         totalCost: true,
         startedAt: true,
         terminatedAt: true,
-        createdAt: true,
+        requestedAt: true,
       },
     })
     

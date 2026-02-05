@@ -94,8 +94,8 @@ router.get('/stats', async (req: Request, res: Response) => {
     // Get counts
     const [userCount, sessionCount, activeSessionCount] = await Promise.all([
       prisma.user.count(),
-      prisma.session.count(),
-      prisma.session.count({ where: { status: 'RUNNING' } }),
+      prisma.pumpSession.count(),
+      prisma.pumpSession.count({ where: { status: 'RUNNING' } }),
     ])
     
     res.json({
